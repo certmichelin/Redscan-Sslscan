@@ -1,4 +1,4 @@
-FROM openjdk:8-jre-buster
+FROM openjdk:8-jre
 
 #################################################################
 RUN echo 'deb-src http://deb.debian.org/debian buster main' >> /etc/apt/sources.list
@@ -7,8 +7,9 @@ RUN echo 'deb-src http://deb.debian.org/debian buster-updates main' >> /etc/apt/
 RUN apt update
 RUN apt install build-essential git zlib1g-dev gcc make cmake -y
 RUN apt build-dep openssl -y
-RUN git clone https://github.com/rbsec/sslscan.git
-WORKDIR sslscan/
+RUN wget https://github.com/rbsec/sslscan/archive/refs/tags/2.0.10.tar.gz
+RUN tar -xvzf 2.0.10.tar.gz
+WORKDIR /sslscan-2.0.10
 RUN make static
 RUN make install
 WORKDIR /
