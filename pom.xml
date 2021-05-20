@@ -5,7 +5,7 @@
 
     <groupId>com.michelin.cert.redscan</groupId>
     <artifactId>Redscan-Sslscan</artifactId>
-    <version>2.0.1</version>
+    <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
     
     <properties>
@@ -14,7 +14,9 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     
         <!-- Define dependencies versions -->
-        <redscan-utils.version>2.0.6</redscan-utils.version>
+        <redscan-utils.version>2.0.7</redscan-utils.version>
+        <jdom2.version>2.0.6</jdom2.version>
+        <json-simple.version>1.1.1</json-simple.version>
         <log4j-layout-template-json.version>2.14.0</log4j-layout-template-json.version>
 
         <!-- Define test dependencies versions -->
@@ -29,7 +31,7 @@
         <version>2.4.1</version>
     </parent>
          
-     <!-- Manage repository for REDSCAN UTILS -->
+    <!-- Manage repository for REDSCAN UTILS -->
     <repositories>
         <repository>
             <id>redscan-utils</id>
@@ -57,7 +59,7 @@
             <artifactId>redscan-utils</artifactId>
             <version>${redscan-utils.version}</version>
         </dependency>
-
+        
         <!-- Dependencies for logging -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -87,7 +89,17 @@
         <!-- End of dependencies for logging -->
         
         <!-- Custom dependencies -->
+        <dependency>
+            <groupId>org.jdom</groupId>
+            <artifactId>jdom2</artifactId>
+            <version>${jdom2.version}</version>
+        </dependency>
         
+        <dependency>
+            <groupId>com.googlecode.json-simple</groupId>
+            <artifactId>json-simple</artifactId>
+            <version>${json-simple.version}</version>
+        </dependency>
         <!-- End of Custom dependencies -->
     </dependencies>
 
