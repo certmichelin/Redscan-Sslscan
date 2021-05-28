@@ -83,7 +83,7 @@ public class SslScanApplication {
       try {
         sslscanOutputFile = File.createTempFile(String.format("sslscan_%s_%s", service.getDomain(), service.getPort()), ".xml");
         OsCommandExecutor osCommandExecutor = new OsCommandExecutor();
-        StreamGobbler streamGobbler = osCommandExecutor.execute(String.format("sslscan --xml=%s %s", sslscanOutputFile.getAbsolutePath(), service.toUrl()));
+        StreamGobbler streamGobbler = osCommandExecutor.execute(String.format("sslscan --no-colour --timeout=10 --xml=%s %s", sslscanOutputFile.getAbsolutePath(), service.toUrl()));
 
         if (streamGobbler != null) {
           LogManager.getLogger(SslScanApplication.class).info(String.format("Ssslscan terminated with status : %d", streamGobbler.getExitStatus()));
@@ -92,7 +92,7 @@ public class SslScanApplication {
             for (Object errorOuput : streamGobbler.getErrorOutputs()) {
               errorMessage.append(errorOuput);
             }
-            LogManager.getLogger(SslScanApplication.class).error(String.format("SSLScan error message : %s", errorMessage.toString()));
+            LogManager.getLogger(SslScanApplication.class).warn(String.format("SSLScan error message : %s", errorMessage.toString()));
           }
 
           JSONObject data = parseXml(sslscanOutputFile.getAbsolutePath(), service);
