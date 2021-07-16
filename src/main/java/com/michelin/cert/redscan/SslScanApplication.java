@@ -110,7 +110,7 @@ public class SslScanApplication {
           JSONObject data = parseXml(sslscanOutputFile.getAbsolutePath(), service);
           if (data != null) {
             LogManager.getLogger(SslScanApplication.class).info(String.format("SSLScan extraction : %s", data.toString()));
-            datalakeConfig.upsertHttpServiceField(service.getDomain(), service.getPort(), "SSLScan", data);
+            datalakeConfig.upsertHttpServiceField(service.getDomain(), service.getPort(), service.getProtocol(), "SSLScan", data);
           } else {
             LogManager.getLogger(SslScanApplication.class).warn(String.format("Empty data for %s", service.toUrl()));
           }
