@@ -17,9 +17,9 @@
 package com.michelin.cert.redscan;
 
 import com.michelin.cert.redscan.utils.datalake.DatalakeStorageException;
-import com.michelin.cert.redscan.utils.models.HttpService;
-import com.michelin.cert.redscan.utils.models.Severity;
-import com.michelin.cert.redscan.utils.models.Vulnerability;
+import com.michelin.cert.redscan.utils.models.reports.Severity;
+import com.michelin.cert.redscan.utils.models.reports.Vulnerability;
+import com.michelin.cert.redscan.utils.models.services.HttpService;
 import com.michelin.cert.redscan.utils.system.OsCommandExecutor;
 import com.michelin.cert.redscan.utils.system.StreamGobbler;
 
@@ -42,7 +42,6 @@ import org.json.simple.JSONObject;
 
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -58,9 +57,6 @@ public class SslScanApplication {
 
   //Only required if pushing data to queues
   private final RabbitTemplate rabbitTemplate;
-
-  @Autowired
-  private DatalakeConfig datalakeConfig;
 
   /**
    * Constructor to init rabbit template. Only required if pushing data to queues.
@@ -88,44 +84,49 @@ public class SslScanApplication {
   @RabbitListener(queues = {RabbitMqConfig.QUEUE_HTTP_SERVICES})
   public void receiveMessage(String message) {
     File sslscanOutputFile = null;
-    HttpService service = new HttpService(message);
-    LogManager.getLogger(SslScanApplication.class).info(String.format("Start sslscan : %s", service.toUrl()));
+    HttpService service = new HttpService();
+    try {
+      service.fromJson(message);
+      LogManager.getLogger(SslScanApplication.class).info(String.format("Start sslscan : %s", service.toUrl()));
 
-    if (service.isSsl()) {
-      try {
-        sslscanOutputFile = File.createTempFile(String.format("sslscan_%s_%s", service.getDomain(), service.getPort()), ".xml");
-        OsCommandExecutor osCommandExecutor = new OsCommandExecutor();
-        StreamGobbler streamGobbler = osCommandExecutor.execute(String.format("sslscan --no-colour --timeout=10 --xml=%s %s", sslscanOutputFile.getAbsolutePath(), service.toUrl()));
+      if (service.isSsl()) {
+        try {
+          sslscanOutputFile = File.createTempFile(String.format("sslscan_%s_%s", service.getDomain(), service.getPort()), ".xml");
+          OsCommandExecutor osCommandExecutor = new OsCommandExecutor();
+          StreamGobbler streamGobbler = osCommandExecutor.execute(String.format("sslscan --no-colour --timeout=10 --xml=%s %s", sslscanOutputFile.getAbsolutePath(), service.toUrl()));
 
-        if (streamGobbler != null) {
-          LogManager.getLogger(SslScanApplication.class).info(String.format("Ssslscan terminated with status : %d", streamGobbler.getExitStatus()));
-          if (streamGobbler.getErrorOutputs() != null && streamGobbler.getErrorOutputs().length > 0) {
-            StringBuilder errorMessage = new StringBuilder();
-            for (Object errorOuput : streamGobbler.getErrorOutputs()) {
-              errorMessage.append(errorOuput);
+          if (streamGobbler != null) {
+            LogManager.getLogger(SslScanApplication.class).info(String.format("Ssslscan terminated with status : %d", streamGobbler.getExitStatus()));
+            if (streamGobbler.getErrorOutputs() != null && streamGobbler.getErrorOutputs().length > 0) {
+              StringBuilder errorMessage = new StringBuilder();
+              for (Object errorOuput : streamGobbler.getErrorOutputs()) {
+                errorMessage.append(errorOuput);
+              }
+              LogManager.getLogger(SslScanApplication.class).warn(String.format("SSLScan error message : %s", errorMessage.toString()));
             }
-            LogManager.getLogger(SslScanApplication.class).warn(String.format("SSLScan error message : %s", errorMessage.toString()));
-          }
 
-          JSONObject data = parseXml(sslscanOutputFile.getAbsolutePath(), service);
-          if (data != null) {
-            LogManager.getLogger(SslScanApplication.class).info(String.format("SSLScan extraction : %s", data.toString()));
-            datalakeConfig.upsertHttpServiceField(service.getDomain(), service.getPort(), service.getProtocol(), "SSLScan", data);
-          } else {
-            LogManager.getLogger(SslScanApplication.class).warn(String.format("Empty data for %s", service.toUrl()));
+            JSONObject data = parseXml(sslscanOutputFile.getAbsolutePath(), service);
+            if (data != null) {
+              LogManager.getLogger(SslScanApplication.class).info(String.format("SSLScan extraction : %s", data.toString()));
+              service.upsertField("SSLScan", data);
+            } else {
+              LogManager.getLogger(SslScanApplication.class).warn(String.format("Empty data for %s", service.toUrl()));
+            }
+          }
+        } catch (DatalakeStorageException ex) {
+          LogManager.getLogger(SslScanApplication.class).error(String.format("Datalake Strorage exception : %s", ex));
+        } catch (IOException ex) {
+          LogManager.getLogger(SslScanApplication.class).error(String.format("IOException : %s", ex));
+        } finally {
+          if (sslscanOutputFile != null) {
+            sslscanOutputFile.delete();
           }
         }
-      } catch (DatalakeStorageException ex) {
-        LogManager.getLogger(SslScanApplication.class).error(String.format("Datalake Strorage exception : %s", ex));
-      } catch (IOException ex) {
-        LogManager.getLogger(SslScanApplication.class).error(String.format("IOException : %s", ex));
-      } finally {
-        if (sslscanOutputFile != null) {
-          sslscanOutputFile.delete();
-        }
+      } else {
+        LogManager.getLogger(SslScanApplication.class).info(String.format(" %s on port %s is not an HTTPS SERVICE", service.getDomain(), service.getPort()));
       }
-    } else {
-      LogManager.getLogger(SslScanApplication.class).info(String.format(" %s on port %s is not an HTTPS SERVICE", service.getDomain(), service.getPort()));
+    } catch (Exception ex) {
+      LogManager.getLogger(SslScanApplication.class).error(String.format("General exception : %s", ex));
     }
   }
 
@@ -233,15 +234,15 @@ public class SslScanApplication {
 
   private void raiseVulnerability(int severity, HttpService service, String vulnName, String title, String message) {
     Vulnerability vuln = new Vulnerability(
-            Vulnerability.generateId("redscan-sslscan", String.format("%s%s", service.getDomain(), service.getPort()), vulnName),
             severity,
+            String.format("SSLSCAN_%s", vulnName.toUpperCase()),
             title,
             message,
             service.toUrl(),
-            "redscan-sslscan"
-    );
+            String.format("%s%s", service.getDomain(), service.getPort()),
+            "redscan-sslscan");
 
-    rabbitTemplate.convertAndSend(RabbitMqConfig.FANOUT_VULNERABILITIES_EXCHANGE_NAME, "", vuln.toJson());
+    rabbitTemplate.convertAndSend(vuln.getFanoutExchangeName(), "", vuln.toJson());
   }
 
   private String getSafeAttribute(Element element, String attributeName) {
